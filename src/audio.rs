@@ -139,6 +139,7 @@ impl Volume {
 /// Ensure proper coordination when using both devices.
 pub struct CS43L22<'a> {
     i2c: I2c<'a, embassy_stm32::mode::Blocking, i2c::Master>,
+    #[allow(dead_code)]
     reset: Output<'a>,
     output: OutputDevice,
     volume: Volume,

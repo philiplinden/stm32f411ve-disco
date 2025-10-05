@@ -51,6 +51,7 @@ pub enum SampleRate {
 /// - CIC decimation filter for PDM to PCM conversion
 /// - Low-pass filtering for anti-aliasing
 pub struct MP45DT02<'a> {
+    #[allow(dead_code)]
     pdm_data: Input<'a>,
     pdm_clk: Output<'a>,
     sample_rate: SampleRate,
