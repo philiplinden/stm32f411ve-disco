@@ -17,11 +17,7 @@
 
 use defmt::{debug, info};
 use embassy_stm32::i2c::{Config as I2cConfig, I2c};
-use embassy_stm32::mode::Async;
-use embassy_stm32::peripherals::{DMA1_CH6, DMA1_CH7, I2C1, PB6, PB9};
-use embassy_stm32::time::Hertz;
-use embassy_stm32::Peripheral;
-use embassy_time::{Duration, Timer};
+use embassy_stm32::{i2c, Peri};
 
 /// I2C addresses
 const ACCEL_ADDR: u8 = 0x19; // 0x32 >> 1
@@ -207,26 +203,22 @@ pub struct MagneticField {
 
 /// LSM303DLHC e-compass driver
 pub struct LSM303DLHC<'a> {
-    i2c: I2c<'a>,
+    i2c: I2c<'a, embassy_stm32::mode::Blocking, i2c::Master>,
     accel_scale: AccelScale,
     mag_gain: MagGain,
 }
 
 impl<'a> LSM303DLHC<'a> {
     /// Create a new LSM303DLHC driver instance
-    pub async fn new(
-        i2c1: impl Peripheral<P = I2C1> + 'a,
-        scl: impl Peripheral<P = PB6> + 'a,
-        sda: impl Peripheral<P = PB9> + 'a,
-        tx_dma: impl Peripheral<P = DMA1_CH6> + 'a,
-        rx_dma: impl Peripheral<P = DMA1_CH7> + 'a,
+    pub fn new<T: i2c::Instance>(
+        i2c1: Peri<'a, T>,
+        scl: Peri<'a, impl i2c::SclPin<T>>,
+        sda: Peri<'a, impl i2c::SdaPin<T>>,
     ) -> Self {
         // Configure I2C for 400 kHz
-        let mut config = I2cConfig::default();
-        config.scl_pullup = true;
-        config.sda_pullup = true;
+        let config = I2cConfig::default();
         
-        let i2c = I2c::new(i2c1, scl, sda, Hertz(400_000), config, tx_dma, rx_dma);
+        let i2c = I2c::new_blocking(i2c1, scl, sda, config);
         
         let mut compass = Self {
             i2c,
@@ -235,95 +227,91 @@ impl<'a> LSM303DLHC<'a> {
         };
         
         // Initialize both sensors
-        compass.init().await;
+        compass.init();
         
         compass
     }
     
     /// Initialize the accelerometer and magnetometer
-    async fn init(&mut self) {
+    fn init(&mut self) {
         // Initialize accelerometer
         // Normal power mode, 100 Hz, all axes enabled
-        self.write_accel_register(accel_regs::CTRL_REG1_A, 0x57).await;
+        self.write_accel_register(accel_regs::CTRL_REG1_A, 0x57);
         
         // No high-pass filter
-        self.write_accel_register(accel_regs::CTRL_REG2_A, 0x00).await;
+        self.write_accel_register(accel_regs::CTRL_REG2_A, 0x00);
         
         // No interrupts
-        self.write_accel_register(accel_regs::CTRL_REG3_A, 0x00).await;
+        self.write_accel_register(accel_regs::CTRL_REG3_A, 0x00);
         
         // Continuous update, default scale (±2g), high resolution
-        self.write_accel_register(accel_regs::CTRL_REG4_A, 0x08).await;
+        self.write_accel_register(accel_regs::CTRL_REG4_A, 0x08);
         
         // No FIFO
-        self.write_accel_register(accel_regs::CTRL_REG5_A, 0x00).await;
-        
-        Timer::after(Duration::from_millis(10)).await;
+        self.write_accel_register(accel_regs::CTRL_REG5_A, 0x00);
         
         // Initialize magnetometer
         // Temperature enabled, 15 Hz data rate
-        self.write_mag_register(mag_regs::CRA_REG_M, 0x90).await;
+        self.write_mag_register(mag_regs::CRA_REG_M, 0x90);
         
         // Default gain (±1.3 gauss)
-        self.write_mag_register(mag_regs::CRB_REG_M, 0x20).await;
+        self.write_mag_register(mag_regs::CRB_REG_M, 0x20);
         
         // Continuous conversion mode
-        self.write_mag_register(mag_regs::MR_REG_M, 0x00).await;
-        
-        Timer::after(Duration::from_millis(10)).await;
+        self.write_mag_register(mag_regs::MR_REG_M, 0x00);
         
         info!("LSM303DLHC initialized");
     }
     
     /// Set accelerometer scale
-    pub async fn set_accel_scale(&mut self, scale: AccelScale) {
+    pub fn set_accel_scale(&mut self, scale: AccelScale) {
         self.accel_scale = scale;
-        let mut ctrl4 = self.read_accel_register(accel_regs::CTRL_REG4_A).await;
+        let mut ctrl4 = self.read_accel_register(accel_regs::CTRL_REG4_A);
         ctrl4 = (ctrl4 & 0xCF) | (scale as u8);
-        self.write_accel_register(accel_regs::CTRL_REG4_A, ctrl4).await;
+        self.write_accel_register(accel_regs::CTRL_REG4_A, ctrl4);
         debug!("Accelerometer scale set to {:?}", scale);
     }
     
     /// Set accelerometer data rate
-    pub async fn set_accel_data_rate(&mut self, rate: AccelDataRate) {
-        let mut ctrl1 = self.read_accel_register(accel_regs::CTRL_REG1_A).await;
+    pub fn set_accel_data_rate(&mut self, rate: AccelDataRate) {
+        let mut ctrl1 = self.read_accel_register(accel_regs::CTRL_REG1_A);
         ctrl1 = (ctrl1 & 0x0F) | (rate as u8);
-        self.write_accel_register(accel_regs::CTRL_REG1_A, ctrl1).await;
+        self.write_accel_register(accel_regs::CTRL_REG1_A, ctrl1);
         debug!("Accelerometer data rate set to {:?}", rate);
     }
     
     /// Set magnetometer gain
-    pub async fn set_mag_gain(&mut self, gain: MagGain) {
+    pub fn set_mag_gain(&mut self, gain: MagGain) {
         self.mag_gain = gain;
-        self.write_mag_register(mag_regs::CRB_REG_M, gain as u8).await;
+        self.write_mag_register(mag_regs::CRB_REG_M, gain as u8);
         debug!("Magnetometer gain set to {:?}", gain);
     }
     
     /// Set magnetometer data rate
-    pub async fn set_mag_data_rate(&mut self, rate: MagDataRate) {
-        let mut cra = self.read_mag_register(mag_regs::CRA_REG_M).await;
+    pub fn set_mag_data_rate(&mut self, rate: MagDataRate) {
+        let mut cra = self.read_mag_register(mag_regs::CRA_REG_M);
         cra = (cra & 0xE3) | (rate as u8);
-        self.write_mag_register(mag_regs::CRA_REG_M, cra).await;
+        self.write_mag_register(mag_regs::CRA_REG_M, cra);
         debug!("Magnetometer data rate set to {:?}", rate);
     }
     
     /// Check if new acceleration data is available
-    pub async fn accel_data_ready(&mut self) -> bool {
-        let status = self.read_accel_register(accel_regs::STATUS_REG_A).await;
+    pub fn accel_data_ready(&mut self) -> bool {
+        let status = self.read_accel_register(accel_regs::STATUS_REG_A);
         (status & 0x08) != 0 // ZYXDA bit
     }
     
     /// Check if new magnetic data is available
-    pub async fn mag_data_ready(&mut self) -> bool {
-        let status = self.read_mag_register(mag_regs::SR_REG_M).await;
+    pub fn mag_data_ready(&mut self) -> bool {
+        let status = self.read_mag_register(mag_regs::SR_REG_M);
         (status & 0x01) != 0 // DRDY bit
     }
     
     /// Read acceleration data
-    pub async fn read_acceleration(&mut self) -> Acceleration {
+    pub fn read_acceleration(&mut self) -> Acceleration {
         // Read all 6 bytes
         let mut data = [0u8; 6];
-        self.read_accel_burst(accel_regs::OUT_X_L_A | 0x80, &mut data).await;
+        self.read_accel_burst(accel_regs::OUT_X_L_A | 0x80, &mut data);
         
         // Convert to signed 16-bit values (12-bit resolution, left-aligned)
         let raw_x = i16::from_le_bytes([data[0], data[1]]) >> 4;
@@ -341,11 +329,11 @@ impl<'a> LSM303DLHC<'a> {
     }
     
     /// Read magnetic field data
-    pub async fn read_magnetic_field(&mut self) -> MagneticField {
+    pub fn read_magnetic_field(&mut self) -> MagneticField {
         // Read all 6 bytes
         // Note: Register order is X, Z, Y (not X, Y, Z)
         let mut data = [0u8; 6];
-        self.read_mag_burst(mag_regs::OUT_X_H_M, &mut data).await;
+        self.read_mag_burst(mag_regs::OUT_X_H_M, &mut data);
         
         // Convert to signed 16-bit values (high byte first for magnetometer)
         let raw_x = i16::from_be_bytes([data[0], data[1]]);
@@ -364,9 +352,9 @@ impl<'a> LSM303DLHC<'a> {
     }
     
     /// Read magnetometer temperature
-    pub async fn read_temperature(&mut self) -> i16 {
-        let high = self.read_mag_register(mag_regs::TEMP_OUT_H_M).await;
-        let low = self.read_mag_register(mag_regs::TEMP_OUT_L_M).await;
+    pub fn read_temperature(&mut self) -> i16 {
+        let high = self.read_mag_register(mag_regs::TEMP_OUT_H_M);
+        let low = self.read_mag_register(mag_regs::TEMP_OUT_L_M);
         i16::from_be_bytes([high, low]) >> 4 // 12-bit resolution
     }
     
@@ -386,32 +374,32 @@ impl<'a> LSM303DLHC<'a> {
     }
     
     // Accelerometer register access
-    async fn read_accel_register(&mut self, reg: u8) -> u8 {
+    fn read_accel_register(&mut self, reg: u8) -> u8 {
         let mut buf = [0u8; 1];
-        self.i2c.write_read(ACCEL_ADDR, &[reg], &mut buf).await.ok();
+        self.i2c.blocking_write_read(ACCEL_ADDR, &[reg], &mut buf).ok();
         buf[0]
     }
     
-    async fn read_accel_burst(&mut self, start_reg: u8, buf: &mut [u8]) {
-        self.i2c.write_read(ACCEL_ADDR, &[start_reg], buf).await.ok();
+    fn read_accel_burst(&mut self, start_reg: u8, buf: &mut [u8]) {
+        self.i2c.blocking_write_read(ACCEL_ADDR, &[start_reg], buf).ok();
     }
     
-    async fn write_accel_register(&mut self, reg: u8, value: u8) {
-        self.i2c.write(ACCEL_ADDR, &[reg, value]).await.ok();
+    fn write_accel_register(&mut self, reg: u8, value: u8) {
+        self.i2c.blocking_write(ACCEL_ADDR, &[reg, value]).ok();
     }
     
     // Magnetometer register access
-    async fn read_mag_register(&mut self, reg: u8) -> u8 {
+    fn read_mag_register(&mut self, reg: u8) -> u8 {
         let mut buf = [0u8; 1];
-        self.i2c.write_read(MAG_ADDR, &[reg], &mut buf).await.ok();
+        self.i2c.blocking_write_read(MAG_ADDR, &[reg], &mut buf).ok();
         buf[0]
     }
     
-    async fn read_mag_burst(&mut self, start_reg: u8, buf: &mut [u8]) {
-        self.i2c.write_read(MAG_ADDR, &[start_reg], buf).await.ok();
+    fn read_mag_burst(&mut self, start_reg: u8, buf: &mut [u8]) {
+        self.i2c.blocking_write_read(MAG_ADDR, &[start_reg], buf).ok();
     }
     
-    async fn write_mag_register(&mut self, reg: u8, value: u8) {
-        self.i2c.write(MAG_ADDR, &[reg, value]).await.ok();
+    fn write_mag_register(&mut self, reg: u8, value: u8) {
+        self.i2c.blocking_write(MAG_ADDR, &[reg, value]).ok();
     }
 }

@@ -25,9 +25,8 @@ use defmt::{debug, info};
 use embassy_stm32::gpio::{Level, Output, Speed};
 use embassy_stm32::i2c::{Config as I2cConfig, I2c};
 use embassy_stm32::mode::Async;
-use embassy_stm32::peripherals::{DMA1_CH6, DMA1_CH7, I2C1, PB6, PB9, PD4};
 use embassy_stm32::time::Hertz;
-use embassy_stm32::Peripheral;
+use embassy_stm32::{i2c, Peri};
 use embassy_time::{Duration, Timer};
 
 /// CS43L22 I2C address
@@ -114,13 +113,13 @@ pub struct CS43L22<'a> {
 impl<'a> CS43L22<'a> {
     /// Create a new CS43L22 driver instance
     /// Note: This shares the I2C bus with the compass, so coordination is needed
-    pub async fn new(
-        i2c1: impl Peripheral<P = I2C1> + 'a,
-        scl: impl Peripheral<P = PB6> + 'a,
-        sda: impl Peripheral<P = PB9> + 'a,
-        reset: impl Peripheral<P = PD4> + 'a,
-        tx_dma: impl Peripheral<P = DMA1_CH6> + 'a,
-        rx_dma: impl Peripheral<P = DMA1_CH7> + 'a,
+    pub async fn new<T: i2c::Instance>(
+        i2c1: Peri<'a, T>,
+        scl: Peri<'a, impl i2c::SclPin<T>>,
+        sda: Peri<'a, impl i2c::SdaPin<T>>,
+        reset: Peri<'a, impl embassy_stm32::gpio::Pin>,
+        tx_dma: Peri<'a, impl i2c::TxDma<T>>,
+        rx_dma: Peri<'a, impl i2c::RxDma<T>>,
     ) -> Self {
         // Configure I2C for 100 kHz (CS43L22 max)
         let mut config = I2cConfig::default();

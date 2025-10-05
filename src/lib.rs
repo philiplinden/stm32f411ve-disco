@@ -8,4 +8,4 @@ pub mod button;
 
 // Onboard sensors
 // pub mod gyro;        // L3GD20 3-axis gyroscope
-// pub mod compass;     // LSM303DLHC e-compass (accelerometer + magnetometer)
+pub mod compass;     // LSM303DLHC e-compass (accelerometer + magnetometer)

@@ -17,8 +17,7 @@
 
 use defmt::info;
 use embassy_stm32::gpio::{Input, Output, Level, Speed, Pull};
-use embassy_stm32::peripherals::{PC3, PB10};
-use embassy_stm32::Peripheral;
+use embassy_stm32::Peri;
 use embassy_time::{Duration, Timer};
 
 /// PDM sampling frequencies
@@ -42,8 +41,8 @@ pub struct MP45DT02<'a> {
 impl<'a> MP45DT02<'a> {
     /// Create a new MP45DT02 driver instance
     pub fn new(
-        pdm_out: impl Peripheral<P = PC3> + 'a,
-        clk_in: impl Peripheral<P = PB10> + 'a,
+        pdm_out: Peri<'a, impl embassy_stm32::gpio::Pin>,
+        clk_in: Peri<'a, impl embassy_stm32::gpio::Pin>,
     ) -> Self {
         let pdm_data = Input::new(pdm_out, Pull::None);
         let pdm_clk = Output::new(clk_in, Level::Low, Speed::VeryHigh);

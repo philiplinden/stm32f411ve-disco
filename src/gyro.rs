@@ -20,10 +20,9 @@
 use defmt::{debug, info};
 use embassy_stm32::gpio::{Level, Output, Speed};
 use embassy_stm32::mode::Async;
-use embassy_stm32::peripherals::{DMA2_CH0, DMA2_CH3, PA5, PA6, PA7, PE3, SPI1};
 use embassy_stm32::spi::{Config, Spi};
 use embassy_stm32::time::Hertz;
-use embassy_stm32::Peripheral;
+use embassy_stm32::{spi, Peri};
 use embassy_time::{Duration, Timer};
 
 /// L3GD20 register addresses
@@ -121,14 +120,14 @@ pub struct L3GD20<'a> {
 
 impl<'a> L3GD20<'a> {
     /// Create a new L3GD20 driver instance
-    pub async fn new(
-        spi1: impl Peripheral<P = SPI1> + 'a,
-        sck: impl Peripheral<P = PA5> + 'a,
-        miso: impl Peripheral<P = PA6> + 'a,
-        mosi: impl Peripheral<P = PA7> + 'a,
-        cs: impl Peripheral<P = PE3> + 'a,
-        tx_dma: impl Peripheral<P = DMA2_CH3> + 'a,
-        rx_dma: impl Peripheral<P = DMA2_CH0> + 'a,
+    pub async fn new<T: spi::Instance>(
+        spi1: Peri<'a, T>,
+        sck: Peri<'a, impl spi::SckPin<T>>,
+        miso: Peri<'a, impl spi::MisoPin<T>>,
+        mosi: Peri<'a, impl spi::MosiPin<T>>,
+        cs: Peri<'a, impl embassy_stm32::gpio::Pin>,
+        tx_dma: Peri<'a, impl spi::TxDma<T>>,
+        rx_dma: Peri<'a, impl spi::RxDma<T>>,
     ) -> Self {
         // Configure SPI
         let mut config = Config::default();

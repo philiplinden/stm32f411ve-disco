@@ -61,7 +61,7 @@ cargo run --example compass      # Read accelerometer/magnetometer
 
 # Audio Examples
 cargo run --example microphone  # MEMS microphone demo
-cargo run --example audio_dac   # Generate beep tones
+cargo run --example audio   # Generate beep tones
 
 # Build without flashing
 cargo build --release
@@ -102,7 +102,7 @@ cargo run --example blinky --release -- --log-level debug
 
 ### Audio
 - **`microphone`** - Capture audio from MEMS microphone (simplified demo)
-- **`audio_dac`** - Generate beep tones and control volume
+- **`audio`** - Generate beep tones and control volume
 
 ## Project Structure
 

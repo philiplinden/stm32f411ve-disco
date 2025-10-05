@@ -18,28 +18,26 @@ async fn main(_spawner: Spawner) {
         p.I2C1,
         p.PB6,  // SCL
         p.PB9,  // SDA
-        p.DMA1_CH6,
-        p.DMA1_CH7,
-    ).await;
+    );
     
     // Configure sensors
-    compass.set_accel_scale(AccelScale::G4).await;
-    compass.set_mag_gain(MagGain::Gauss1_9).await;
+    compass.set_accel_scale(AccelScale::G4);
+    compass.set_mag_gain(MagGain::Gauss1_9);
     
     info!("Starting compass readings (tilt and rotate the board)");
     
     loop {
         // Read acceleration
-        let accel = compass.read_acceleration().await;
+        let accel = compass.read_acceleration();
         
         // Read magnetic field
-        let mag = compass.read_magnetic_field().await;
+        let mag = compass.read_magnetic_field();
         
         // Calculate heading
         let heading = LSM303DLHC::calculate_heading(&mag);
         
         // Read temperature
-        let temp = compass.read_temperature().await;
+        let temp = compass.read_temperature();
         
         // Display values
         info!(
