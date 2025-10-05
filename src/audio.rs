@@ -71,29 +71,45 @@ mod regs {
 }
 
 /// Output device selection
+///
+/// The CS43L22 can drive both headphones and speakers.
+/// Auto mode will detect which output is connected.
 #[derive(Debug, Clone, Copy)]
 pub enum OutputDevice {
-    /// Auto-detect (default)
+    /// Auto-detect (default) - Automatically selects based on jack detection
     Auto = 0,
-    /// Speaker output
+    /// Speaker output - Routes audio to the built-in speaker
     Speaker = 1,
-    /// Headphone output  
+    /// Headphone output - Routes audio to the headphone jack
     Headphone = 2,
-    /// Both outputs
+    /// Both outputs - Simultaneous output to both devices
     Both = 3,
 }
 
 /// Volume level (0-100)
+///
+/// Represents the audio output volume as a percentage.
+/// The value is automatically clamped to the valid range.
 #[derive(Debug, Clone, Copy)]
 pub struct Volume(pub u8);
 
 impl Volume {
     /// Create a new volume level (clamped to 0-100)
+    ///
+    /// # Arguments
+    /// * `level` - Volume level as percentage (0-100)
+    ///
+    /// # Example
+    /// ```no_run
+    /// let vol = Volume::new(75); // 75% volume
+    /// ```
     pub fn new(level: u8) -> Self {
         Self(level.min(100))
     }
     
     /// Convert to DAC register value
+    ///
+    /// Internal method to convert percentage to CS43L22 register format
     fn to_dac_value(&self) -> u8 {
         // Convert 0-100 to DAC range (0x00-0xFF)
         ((self.0 as u16 * 255) / 100) as u8
@@ -101,6 +117,26 @@ impl Volume {
 }
 
 /// CS43L22 audio DAC driver
+///
+/// Driver for the CS43L22 stereo audio DAC with headphone and speaker amplifiers.
+/// 
+/// ## Current Implementation
+/// - I2C control interface for configuration
+/// - Volume control and muting
+/// - Output device selection (speaker/headphone)
+/// - Basic beep tone generation
+/// 
+/// ## Limitations
+/// This driver currently only provides I2C control functionality.
+/// Full audio playback would require:
+/// - I2S peripheral configuration for audio data streaming
+/// - DMA setup for continuous audio transfer
+/// - Audio PLL configuration for precise timing
+/// - Sample rate and format configuration
+///
+/// ## Shared I2C Bus
+/// Note that this device shares the I2C bus with the LSM303DLHC compass.
+/// Ensure proper coordination when using both devices.
 pub struct CS43L22<'a> {
     i2c: I2c<'a, embassy_stm32::mode::Blocking, i2c::Master>,
     reset: Output<'a>,
@@ -167,6 +203,12 @@ impl<'a> CS43L22<'a> {
     }
     
     /// Power on the DAC
+    ///
+    /// Enables the audio output and amplifiers. The DAC must be powered on
+    /// before audio playback or beep generation.
+    ///
+    /// # Note
+    /// Takes approximately 100ms for the power rails to stabilize.
     pub fn power_on(&mut self) {
         self.write_register(regs::POWER_CTL1, 0x9E);
         embassy_time::block_for(Duration::from_millis(100));
@@ -174,12 +216,25 @@ impl<'a> CS43L22<'a> {
     }
     
     /// Power off the DAC
+    ///
+    /// Disables the audio output and enters low-power mode.
+    /// Call this when audio is not needed to save power.
     pub fn power_off(&mut self) {
         self.write_register(regs::POWER_CTL1, 0x01);
         info!("CS43L22 powered off");
     }
     
     /// Set the output device
+    ///
+    /// Configures which audio output(s) are active.
+    ///
+    /// # Arguments
+    /// * `output` - The desired output configuration
+    ///
+    /// # Example
+    /// ```no_run
+    /// dac.set_output(OutputDevice::Headphone);
+    /// ```
     pub fn set_output(&mut self, output: OutputDevice) {
         self.output = output;
         
@@ -195,6 +250,16 @@ impl<'a> CS43L22<'a> {
     }
     
     /// Set the master volume
+    ///
+    /// Sets the output volume for both left and right channels.
+    ///
+    /// # Arguments
+    /// * `volume` - Volume level (0-100%)
+    ///
+    /// # Example
+    /// ```no_run
+    /// dac.set_volume(Volume::new(80)); // 80% volume
+    /// ```
     pub fn set_volume(&mut self, volume: Volume) {
         self.volume = volume;
         let val = volume.to_dac_value();
@@ -205,19 +270,35 @@ impl<'a> CS43L22<'a> {
     }
     
     /// Mute the output
+    ///
+    /// Temporarily mutes audio output without changing the volume setting.
+    /// Use `unmute()` to restore the previous volume level.
     pub fn mute(&mut self) {
         self.write_register(regs::MASTER_VOL_A, 0x00);
         self.write_register(regs::MASTER_VOL_B, 0x00);
     }
     
     /// Unmute the output
+    ///
+    /// Restores audio output to the previously configured volume level
+    /// after muting.
     pub fn unmute(&mut self) {
         let val = self.volume.to_dac_value();
         self.write_register(regs::MASTER_VOL_A, val);
         self.write_register(regs::MASTER_VOL_B, val);
     }
     
-    /// Play a beep tone
+    /// Play a beep tone (demonstration only)
+    ///
+    /// Generates a simple beep tone using the CS43L22's internal tone generator.
+    /// 
+    /// # Arguments
+    /// * `frequency` - Frequency setting (0-255, actual frequency depends on configuration)
+    /// * `duration_ms` - Duration of the beep in milliseconds
+    ///
+    /// # Note
+    /// This is a simplified implementation. The beep generator requires additional
+    /// configuration for proper operation including I2S clock setup.
     pub fn beep(&mut self, frequency: u8, duration_ms: u16) {
         // Configure beep frequency and duration
         self.write_register(regs::BEEP_FREQ_ON_TIME, frequency);

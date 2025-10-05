@@ -1,11 +1,18 @@
 cargo-features = ["per-package-target"]
 
 [package]
-authors = ["Philip Linden <lindenphilipj@gmail.com>"]
-edition = "2021"
-readme = "README.md"
 name = "stm32f411ve-disco"
 version = "0.1.0"
+authors = ["Philip Linden <lindenphilipj@gmail.com>"]
+edition = "2021"
+description = "Board support package for STM32F411E-DISCO (Discovery) development board with Embassy async framework"
+readme = "README.md"
+repository = "https://github.com/philiplinden/stm32f411ve-disco"
+homepage = "https://github.com/philiplinden/stm32f411ve-disco"
+documentation = "https://docs.rs/stm32f411ve-disco"
+license = "MIT OR Apache-2.0"
+keywords = ["embedded", "stm32", "stm32f4", "embassy", "no-std"]
+categories = ["embedded", "hardware-support", "no-std"]
 # This is an unstable feature - linter warning is expected
 forced-target = "thumbv7em-none-eabihf"
 
