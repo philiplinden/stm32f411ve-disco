@@ -1,0 +1,21 @@
+[default.general]
+chip = "stm32f411ve"
+
+[default.probe]
+protocol = "Swd"
+speed = 1000
+
+[default.flashing]
+enabled = true
+restore_unwritten_bytes = false
+halt_afterwards = false
+
+[default.reset]
+enabled = true
+halt_afterwards = false
+
+[default.rtt]
+enabled = true
+
+[default.gdb]
+enabled = false

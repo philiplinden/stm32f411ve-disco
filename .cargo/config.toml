@@ -1,0 +1,14 @@
+[target.thumbv7em-none-eabihf]
+runner = "probe-rs run --chip stm32f411ve --protocol swd --connect-under-reset"
+rustflags = [
+  # Linker flags for defmt
+  "-C", "link-arg=-Tdefmt.x",
+  # Prevent unwanted optimizations
+  "-C", "link-arg=--nmagic",
+]
+
+[build]
+target = "thumbv7em-none-eabihf"
+
+[env]
+DEFMT_LOG = "info"

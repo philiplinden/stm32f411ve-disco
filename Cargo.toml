@@ -1,0 +1,52 @@
+cargo-features = ["per-package-target"]
+
+[package]
+authors = ["Philip Linden <lindenphilipj@gmail.com>"]
+edition = "2021"
+readme = "README.md"
+name = "stm32f411ve-disco"
+version = "0.1.0"
+# This is an unstable feature - linter warning is expected
+forced-target = "thumbv7em-none-eabihf"
+
+[dependencies]
+cortex-m = { version = "0.7.7", features = [
+    "critical-section-single-core",
+    "inline-asm",
+] }
+cortex-m-rt = "0.7.5"
+defmt = "1.0.1"
+defmt-rtt = "1.0.0"
+embassy-stm32 = { version = "0.4.0", features = [
+    "defmt",
+    "rt",
+    "stm32f411ve",
+    "memory-x",
+    "time",
+    "time-driver-tim4",
+] }
+embassy-executor = { version = "0.9.1", features = [
+    "arch-cortex-m",
+    "defmt",
+    "executor-interrupt",
+    "executor-thread",
+] }
+panic-probe = { version = "1.0.0", features = ["print-defmt"] }
+panic-abort = "0.3.2"
+embassy-time = { version = "0.5.0", features = [
+    "defmt",
+    "defmt-timestamp-uptime",
+    "tick-hz-32_768",
+] }
+embassy-sync = { version = "0.7.2", features = ["defmt"] }
+embassy-embedded-hal = "0.5.0"
+embedded-hal-async = "1.0.0"
+fixed = "1.29.0"
+micromath = "2.1.0"
+
+[lib]
+test = false
+bench = false
+
+# Examples are in examples/ directory
+# Run with: cargo run --example <name>

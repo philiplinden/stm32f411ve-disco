@@ -1,0 +1,5 @@
+[toolchain]
+channel = "nightly" # required for per-package-target
+
+[unstable]
+per-package-target = true
