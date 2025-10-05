@@ -7,5 +7,5 @@ pub mod button;
 // pub mod audio;       // CS43L22 audio DAC
 
 // Onboard sensors
-// pub mod gyro;        // L3GD20 3-axis gyroscope
+pub mod gyro;        // L3GD20 3-axis gyroscope
 pub mod compass;     // LSM303DLHC e-compass (accelerometer + magnetometer)

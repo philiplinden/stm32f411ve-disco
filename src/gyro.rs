@@ -19,11 +19,9 @@
 
 use defmt::{debug, info};
 use embassy_stm32::gpio::{Level, Output, Speed};
-use embassy_stm32::mode::Async;
 use embassy_stm32::spi::{Config, Spi};
 use embassy_stm32::time::Hertz;
 use embassy_stm32::{spi, Peri};
-use embassy_time::{Duration, Timer};
 
 /// L3GD20 register addresses
 #[allow(dead_code)]
@@ -113,21 +111,19 @@ pub struct AngularRate {
 
 /// L3GD20 gyroscope driver
 pub struct L3GD20<'a> {
-    spi: Spi<'a, Async>,
+    spi: Spi<'a, embassy_stm32::mode::Blocking>,
     cs: Output<'a>,
     scale: FullScale,
 }
 
 impl<'a> L3GD20<'a> {
     /// Create a new L3GD20 driver instance
-    pub async fn new<T: spi::Instance>(
+    pub fn new<T: spi::Instance>(
         spi1: Peri<'a, T>,
         sck: Peri<'a, impl spi::SckPin<T>>,
         miso: Peri<'a, impl spi::MisoPin<T>>,
         mosi: Peri<'a, impl spi::MosiPin<T>>,
         cs: Peri<'a, impl embassy_stm32::gpio::Pin>,
-        tx_dma: Peri<'a, impl spi::TxDma<T>>,
-        rx_dma: Peri<'a, impl spi::RxDma<T>>,
     ) -> Self {
         // Configure SPI
         let mut config = Config::default();
@@ -137,7 +133,7 @@ impl<'a> L3GD20<'a> {
             phase: embassy_stm32::spi::Phase::CaptureOnSecondTransition,
         };
         
-        let spi = Spi::new(spi1, sck, mosi, miso, tx_dma, rx_dma, config);
+        let spi = Spi::new_blocking(spi1, sck, mosi, miso, config);
         let cs = Output::new(cs, Level::High, Speed::VeryHigh);
         
         let mut gyro = Self {
@@ -147,69 +143,65 @@ impl<'a> L3GD20<'a> {
         };
         
         // Initialize the sensor
-        gyro.init().await;
+        gyro.init();
         
         gyro
     }
     
     /// Initialize the gyroscope
-    async fn init(&mut self) {
-        // Reset sequence
-        Timer::after(Duration::from_millis(10)).await;
+    fn init(&mut self) {
         
         // Check WHO_AM_I register
-        let who_am_i = self.read_register(regs::WHO_AM_I).await;
+        let who_am_i = self.read_register(regs::WHO_AM_I);
         info!("L3GD20 WHO_AM_I: {:#x} (expected 0xD4 or 0xD7)", who_am_i);
         
         // Power on and enable all axes
         // PD=1 (normal mode), Zen=1, Yen=1, Xen=1
         // Default data rate 95 Hz
-        self.write_register(regs::CTRL_REG1, 0x0F).await;
+        self.write_register(regs::CTRL_REG1, 0x0F);
         
         // Normal mode, no high-pass filter
-        self.write_register(regs::CTRL_REG2, 0x00).await;
+        self.write_register(regs::CTRL_REG2, 0x00);
         
         // No interrupts
-        self.write_register(regs::CTRL_REG3, 0x00).await;
+        self.write_register(regs::CTRL_REG3, 0x00);
         
         // Continuous update, default scale (250 dps)
-        self.write_register(regs::CTRL_REG4, 0x00).await;
+        self.write_register(regs::CTRL_REG4, 0x00);
         
         // No FIFO, no high-pass filter
-        self.write_register(regs::CTRL_REG5, 0x00).await;
-        
-        Timer::after(Duration::from_millis(250)).await;
+        self.write_register(regs::CTRL_REG5, 0x00);
         info!("L3GD20 initialized");
     }
     
     /// Set the full scale range
-    pub async fn set_scale(&mut self, scale: FullScale) {
+    pub fn set_scale(&mut self, scale: FullScale) {
         self.scale = scale;
-        let mut ctrl4 = self.read_register(regs::CTRL_REG4).await;
+        let mut ctrl4 = self.read_register(regs::CTRL_REG4);
         ctrl4 = (ctrl4 & 0xCF) | (scale as u8);
-        self.write_register(regs::CTRL_REG4, ctrl4).await;
+        self.write_register(regs::CTRL_REG4, ctrl4);
         debug!("L3GD20 scale set to {:?}", scale);
     }
     
     /// Set the output data rate
-    pub async fn set_data_rate(&mut self, rate: DataRate) {
-        let mut ctrl1 = self.read_register(regs::CTRL_REG1).await;
+    pub fn set_data_rate(&mut self, rate: DataRate) {
+        let mut ctrl1 = self.read_register(regs::CTRL_REG1);
         ctrl1 = (ctrl1 & 0x0F) | (rate as u8);
-        self.write_register(regs::CTRL_REG1, ctrl1).await;
+        self.write_register(regs::CTRL_REG1, ctrl1);
         debug!("L3GD20 data rate set to {:?}", rate);
     }
     
     /// Check if new data is available
-    pub async fn data_ready(&mut self) -> bool {
-        let status = self.read_register(regs::STATUS_REG).await;
+    pub fn data_ready(&mut self) -> bool {
+        let status = self.read_register(regs::STATUS_REG);
         (status & 0x08) != 0 // ZYXDA bit
     }
     
     /// Read angular rate data from all three axes
-    pub async fn read_angular_rate(&mut self) -> AngularRate {
+    pub fn read_angular_rate(&mut self) -> AngularRate {
         // Read all 6 bytes in one transaction (auto-increment)
         let mut data = [0u8; 6];
-        self.read_burst(regs::OUT_X_L | 0x80, &mut data).await;
+        self.read_burst(regs::OUT_X_L | 0x80, &mut data);
         
         // Convert to signed 16-bit values
         let raw_x = i16::from_le_bytes([data[0], data[1]]);
@@ -227,44 +219,41 @@ impl<'a> L3GD20<'a> {
     }
     
     /// Read temperature (raw value)
-    pub async fn read_temperature(&mut self) -> i8 {
-        self.read_register(regs::OUT_TEMP).await as i8
+    pub fn read_temperature(&mut self) -> i8 {
+        self.read_register(regs::OUT_TEMP) as i8
     }
     
     /// Read a single register
-    async fn read_register(&mut self, reg: u8) -> u8 {
-        let mut buf = [0u8; 1];
+    fn read_register(&mut self, reg: u8) -> u8 {
         self.cs.set_low();
         
-        // Send read command (MSB=1 for read)
-        let _ = self.spi.transfer(&mut [reg | 0x80], &mut [0]).await;
-        let _ = self.spi.transfer(&mut [0], &mut buf).await;
+        // Send read command (MSB=1 for read) and read the data
+        let mut buf = [reg | 0x80, 0x00];
+        let _ = self.spi.blocking_transfer_in_place(&mut buf);
         
         self.cs.set_high();
-        buf[0]
+        buf[1]  // Second byte contains the register value
     }
     
     /// Read multiple registers (burst mode)
-    async fn read_burst(&mut self, start_reg: u8, buf: &mut [u8]) {
+    fn read_burst(&mut self, start_reg: u8, buf: &mut [u8]) {
         self.cs.set_low();
         
-        // Send read command with auto-increment
-        let _ = self.spi.transfer(&mut [start_reg | 0x80], &mut [0]).await;
-        
-        // Create temporary buffer for reading
-        let mut dummy = [0u8; 6]; // Max size we'll need
-        let len = buf.len().min(6);
-        let _ = self.spi.transfer(&mut dummy[..len], &mut buf[..len]).await;
+        // Send read command with auto-increment, then read data
+        let cmd = [start_reg | 0x80];
+        let _ = self.spi.blocking_write(&cmd);
+        let _ = self.spi.blocking_read(buf);
         
         self.cs.set_high();
     }
     
     /// Write to a single register
-    async fn write_register(&mut self, reg: u8, value: u8) {
+    fn write_register(&mut self, reg: u8, value: u8) {
         self.cs.set_low();
         
-        // Send write command (MSB=0 for write)
-        let _ = self.spi.transfer(&mut [reg & 0x7F, value], &mut [0, 0]).await;
+        // Send write command (MSB=0 for write) and data
+        let buf = [reg & 0x7F, value];
+        let _ = self.spi.blocking_write(&buf);
         
         self.cs.set_high();
     }

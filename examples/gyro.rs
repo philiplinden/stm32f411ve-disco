@@ -20,26 +20,24 @@ async fn main(_spawner: Spawner) {
         p.PA6,  // MISO
         p.PA7,  // MOSI
         p.PE3,  // CS
-        p.DMA2_CH3,
-        p.DMA2_CH0,
-    ).await;
+    );
     
     // Configure for ±500 dps range
-    gyro.set_scale(FullScale::Dps500).await;
+    gyro.set_scale(FullScale::Dps500);
     
     info!("Starting gyroscope readings (move the board to see values change)");
     
     loop {
         // Wait for new data
-        while !gyro.data_ready().await {
+        while !gyro.data_ready() {
             Timer::after_millis(1).await;
         }
         
         // Read angular rate
-        let rate = gyro.read_angular_rate().await;
+        let rate = gyro.read_angular_rate();
         
         // Read temperature
-        let temp = gyro.read_temperature().await;
+        let temp = gyro.read_temperature();
         
         // Display values
         info!(
