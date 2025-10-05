@@ -19,16 +19,14 @@ async fn main(_spawner: Spawner) {
         p.PB6,  // SCL (shared with compass)
         p.PB9,  // SDA (shared with compass)
         p.PD4,  // RESET
-        p.DMA1_CH6,
-        p.DMA1_CH7,
-    ).await;
+    );
     
     // Configure audio output
-    dac.set_output(OutputDevice::Auto).await;
-    dac.set_volume(Volume::new(80)).await;
+    dac.set_output(OutputDevice::Auto);
+    dac.set_volume(Volume::new(80));
     
     // Power on the DAC
-    dac.power_on().await;
+    dac.power_on();
     
     info!("Playing beep sequence...");
     
@@ -36,7 +34,7 @@ async fn main(_spawner: Spawner) {
         // Play ascending tones
         info!("Ascending tones");
         for freq in [10, 20, 30, 40, 50] {
-            dac.beep(freq, 200).await;
+            dac.beep(freq, 200);
             Timer::after_millis(100).await;
         }
         
@@ -45,7 +43,7 @@ async fn main(_spawner: Spawner) {
         // Play descending tones
         info!("Descending tones");
         for freq in [50, 40, 30, 20, 10] {
-            dac.beep(freq, 200).await;
+            dac.beep(freq, 200);
             Timer::after_millis(100).await;
         }
         
@@ -53,17 +51,17 @@ async fn main(_spawner: Spawner) {
         
         // Test volume control
         info!("Volume test");
-        dac.set_volume(Volume::new(30)).await;
-        dac.beep(30, 500).await;
+        dac.set_volume(Volume::new(30));
+        dac.beep(30, 500);
         
-        dac.set_volume(Volume::new(60)).await;
-        dac.beep(30, 500).await;
+        dac.set_volume(Volume::new(60));
+        dac.beep(30, 500);
         
-        dac.set_volume(Volume::new(90)).await;
-        dac.beep(30, 500).await;
+        dac.set_volume(Volume::new(90));
+        dac.beep(30, 500);
         
         // Reset volume
-        dac.set_volume(Volume::new(80)).await;
+        dac.set_volume(Volume::new(80));
         
         Timer::after_millis(2000).await;
     }

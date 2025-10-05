@@ -61,7 +61,7 @@ cargo run --example compass      # Read accelerometer/magnetometer
 
 # Audio Examples
 cargo run --example microphone  # MEMS microphone demo
-cargo run --example audio   # Generate beep tones
+cargo run --example audio_dac   # Generate beep tones
 
 # Build without flashing
 cargo build --release
@@ -102,7 +102,32 @@ cargo run --example blinky --release -- --log-level debug
 
 ### Audio
 - **`microphone`** - Capture audio from MEMS microphone (simplified demo)
-- **`audio`** - Generate beep tones and control volume
+- **`audio_dac`** - CS43L22 I2C control interface demo (⚠️ **no audio output** - see limitations below)
+
+## Known Limitations
+
+### Audio DAC (CS43L22)
+The `audio_dac` example demonstrates I2C communication with the CS43L22 audio DAC chip but **does not produce actual sound**. The chip requires:
+
+- **I2S peripheral setup** - Audio data streaming interface (MCLK, SCK, SD, WS pins)
+- **Audio PLL configuration** - STM32 clock setup for precise audio timing
+- **Sample streaming** - Continuous DMA transfers of audio data
+- **Advanced beep generator setup** - Additional register configuration for tone generation
+
+**Current Status:**
+- ✅ I2C communication works correctly
+- ✅ Chip initialization and power control functional
+- ✅ Volume and output device configuration works
+- ❌ No I2S implementation (requires significant additional code)
+- ❌ No audio output (beep tone generator not fully configured)
+
+The audio module serves as a **control interface reference** for projects that need I2C access to the CS43L22.
+
+### Microphone (MP45DT02)
+The microphone module is a simplified GPIO demonstration. Full PDM audio capture would require:
+- I2S peripheral in PDM mode
+- CIC decimation filter implementation
+- DMA for continuous sampling
 
 ## Project Structure
 

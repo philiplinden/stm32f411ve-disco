@@ -24,10 +24,8 @@
 use defmt::{debug, info};
 use embassy_stm32::gpio::{Level, Output, Speed};
 use embassy_stm32::i2c::{Config as I2cConfig, I2c};
-use embassy_stm32::mode::Async;
-use embassy_stm32::time::Hertz;
 use embassy_stm32::{i2c, Peri};
-use embassy_time::{Duration, Timer};
+use embassy_time::Duration;
 
 /// CS43L22 I2C address
 const CS43L22_ADDR: u8 = 0x4A; // 0x94 >> 1
@@ -104,7 +102,7 @@ impl Volume {
 
 /// CS43L22 audio DAC driver
 pub struct CS43L22<'a> {
-    i2c: I2c<'a>,
+    i2c: I2c<'a, embassy_stm32::mode::Blocking, i2c::Master>,
     reset: Output<'a>,
     output: OutputDevice,
     volume: Volume,
@@ -113,26 +111,22 @@ pub struct CS43L22<'a> {
 impl<'a> CS43L22<'a> {
     /// Create a new CS43L22 driver instance
     /// Note: This shares the I2C bus with the compass, so coordination is needed
-    pub async fn new<T: i2c::Instance>(
+    pub fn new<T: i2c::Instance>(
         i2c1: Peri<'a, T>,
         scl: Peri<'a, impl i2c::SclPin<T>>,
         sda: Peri<'a, impl i2c::SdaPin<T>>,
         reset: Peri<'a, impl embassy_stm32::gpio::Pin>,
-        tx_dma: Peri<'a, impl i2c::TxDma<T>>,
-        rx_dma: Peri<'a, impl i2c::RxDma<T>>,
     ) -> Self {
         // Configure I2C for 100 kHz (CS43L22 max)
-        let mut config = I2cConfig::default();
-        config.scl_pullup = true;
-        config.sda_pullup = true;
+        let config = I2cConfig::default();
         
-        let i2c = I2c::new(i2c1, scl, sda, Hertz(100_000), config, tx_dma, rx_dma);
+        let i2c = I2c::new_blocking(i2c1, scl, sda, config);
         let mut reset = Output::new(reset, Level::Low, Speed::Low);
         
-        // Reset the chip
-        Timer::after(Duration::from_millis(10)).await;
+        // Reset the chip - blocking delay
+        embassy_time::block_for(Duration::from_millis(10));
         reset.set_high();
-        Timer::after(Duration::from_millis(10)).await;
+        embassy_time::block_for(Duration::from_millis(10));
         
         let mut dac = Self {
             i2c,
@@ -142,53 +136,51 @@ impl<'a> CS43L22<'a> {
         };
         
         // Initialize the DAC
-        dac.init().await;
+        dac.init();
         
         dac
     }
     
     /// Initialize the audio DAC
-    async fn init(&mut self) {
+    fn init(&mut self) {
         // Read chip ID (should be 0xE0 for CS43L22)
-        let chip_id = self.read_register(regs::ID).await;
+        let chip_id = self.read_register(regs::ID);
         info!("CS43L22 chip ID: {:#x} (expected 0xE0)", chip_id);
         
         // Keep powered down during configuration
-        self.write_register(regs::POWER_CTL1, 0x01).await;
+        self.write_register(regs::POWER_CTL1, 0x01);
         
         // Configure clocking (auto-detect MCLK)
-        self.write_register(regs::CLOCKING_CTL, 0x80).await;
+        self.write_register(regs::CLOCKING_CTL, 0x80);
         
         // Configure I2S interface (slave mode, I2S format, 16-bit)
-        self.write_register(regs::INTERFACE_CTL1, 0x04).await;
+        self.write_register(regs::INTERFACE_CTL1, 0x04);
         
         // Set initial volume
         let vol = self.volume.to_dac_value();
-        self.write_register(regs::MASTER_VOL_A, vol).await;
-        self.write_register(regs::MASTER_VOL_B, vol).await;
+        self.write_register(regs::MASTER_VOL_A, vol);
+        self.write_register(regs::MASTER_VOL_B, vol);
         
         // Configure output path
-        self.write_register(regs::ANALOG_ZC_SR, 0x00).await;
-        
-        Timer::after(Duration::from_millis(10)).await;
+        self.write_register(regs::ANALOG_ZC_SR, 0x00);
         info!("CS43L22 initialized");
     }
     
     /// Power on the DAC
-    pub async fn power_on(&mut self) {
-        self.write_register(regs::POWER_CTL1, 0x9E).await;
-        Timer::after(Duration::from_millis(100)).await;
+    pub fn power_on(&mut self) {
+        self.write_register(regs::POWER_CTL1, 0x9E);
+        embassy_time::block_for(Duration::from_millis(100));
         info!("CS43L22 powered on");
     }
     
     /// Power off the DAC
-    pub async fn power_off(&mut self) {
-        self.write_register(regs::POWER_CTL1, 0x01).await;
+    pub fn power_off(&mut self) {
+        self.write_register(regs::POWER_CTL1, 0x01);
         info!("CS43L22 powered off");
     }
     
     /// Set the output device
-    pub async fn set_output(&mut self, output: OutputDevice) {
+    pub fn set_output(&mut self, output: OutputDevice) {
         self.output = output;
         
         let val = match output {
@@ -198,57 +190,57 @@ impl<'a> CS43L22<'a> {
             OutputDevice::Both => 0xAA,
         };
         
-        self.write_register(regs::POWER_CTL2, val).await;
+        self.write_register(regs::POWER_CTL2, val);
         debug!("Output device set to {:?}", output);
     }
     
     /// Set the master volume
-    pub async fn set_volume(&mut self, volume: Volume) {
+    pub fn set_volume(&mut self, volume: Volume) {
         self.volume = volume;
         let val = volume.to_dac_value();
         
-        self.write_register(regs::MASTER_VOL_A, val).await;
-        self.write_register(regs::MASTER_VOL_B, val).await;
+        self.write_register(regs::MASTER_VOL_A, val);
+        self.write_register(regs::MASTER_VOL_B, val);
         debug!("Volume set to {}%", volume.0);
     }
     
     /// Mute the output
-    pub async fn mute(&mut self) {
-        self.write_register(regs::MASTER_VOL_A, 0x00).await;
-        self.write_register(regs::MASTER_VOL_B, 0x00).await;
+    pub fn mute(&mut self) {
+        self.write_register(regs::MASTER_VOL_A, 0x00);
+        self.write_register(regs::MASTER_VOL_B, 0x00);
     }
     
     /// Unmute the output
-    pub async fn unmute(&mut self) {
+    pub fn unmute(&mut self) {
         let val = self.volume.to_dac_value();
-        self.write_register(regs::MASTER_VOL_A, val).await;
-        self.write_register(regs::MASTER_VOL_B, val).await;
+        self.write_register(regs::MASTER_VOL_A, val);
+        self.write_register(regs::MASTER_VOL_B, val);
     }
     
     /// Play a beep tone
-    pub async fn beep(&mut self, frequency: u8, duration_ms: u16) {
+    pub fn beep(&mut self, frequency: u8, duration_ms: u16) {
         // Configure beep frequency and duration
-        self.write_register(regs::BEEP_FREQ_ON_TIME, frequency).await;
-        self.write_register(regs::BEEP_VOL_OFF_TIME, 0x06).await; // Medium volume
+        self.write_register(regs::BEEP_FREQ_ON_TIME, frequency);
+        self.write_register(regs::BEEP_VOL_OFF_TIME, 0x06); // Medium volume
         
         // Enable beep
-        self.write_register(regs::BEEP_TONE_CFG, 0xC0).await;
+        self.write_register(regs::BEEP_TONE_CFG, 0xC0);
         
-        Timer::after(Duration::from_millis(duration_ms as u64)).await;
+        embassy_time::block_for(Duration::from_millis(duration_ms as u64));
         
         // Disable beep
-        self.write_register(regs::BEEP_TONE_CFG, 0x00).await;
+        self.write_register(regs::BEEP_TONE_CFG, 0x00);
     }
     
     /// Read a register
-    async fn read_register(&mut self, reg: u8) -> u8 {
+    fn read_register(&mut self, reg: u8) -> u8 {
         let mut buf = [0u8; 1];
-        self.i2c.write_read(CS43L22_ADDR, &[reg], &mut buf).await.ok();
+        self.i2c.blocking_write_read(CS43L22_ADDR, &[reg], &mut buf).ok();
         buf[0]
     }
     
     /// Write to a register
-    async fn write_register(&mut self, reg: u8, value: u8) {
-        self.i2c.write(CS43L22_ADDR, &[reg, value]).await.ok();
+    fn write_register(&mut self, reg: u8, value: u8) {
+        self.i2c.blocking_write(CS43L22_ADDR, &[reg, value]).ok();
     }
 }
